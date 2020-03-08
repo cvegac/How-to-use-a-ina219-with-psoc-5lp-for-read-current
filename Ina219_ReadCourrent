@@ -1,0 +1,72 @@
+#include "project.h"
+
+#define SlaveAddress 0x40    //(A0+A1=GND)
+
+uint16 Calib  = 0x1000;
+uint16 Config = 0x39FF;
+uint8  result[2];
+uint16 Lectura;
+
+int main(void)
+{
+    CyGlobalIntEnable; /* Enable global interrupts. */
+    LCD_Start();
+    I2C_Start();
+    
+    //Calibracion inicial
+    do{
+        result[0]=I2C_MasterSendStart(SlaveAddress,I2C_WRITE_XFER_MODE);
+    }
+    while(result[0]!=I2C_MSTR_NO_ERROR);                    // Inicializar la conexion
+    I2C_MasterWriteByte(0x05);                              // Direcciona memoria del sensor a la memoria de calibracion
+    I2C_MasterWriteByte((Calib >> 8) & 0xFF);               // Manda los primeros 8 bits  0x1000 -> 0x0010 -> 0x10
+    I2C_MasterWriteByte(Calib & 0xFF);                      // Manda los ultimos 8 bits   0x1000 -> 0x00
+    I2C_MasterSendStop();                                   // Finaliza la conexion  
+    
+    //Configuracion inicial
+    do {
+        result[0]=I2C_MasterSendStart(SlaveAddress,I2C_WRITE_XFER_MODE);
+    }
+    while(result[0]!=I2C_MSTR_NO_ERROR);                    // Inicializar la conexion
+    I2C_MasterWriteByte(0x00);                              // Direcciona memoria del sensor a la memoria de config
+    I2C_MasterWriteByte((Config >> 8) & 0xFF);              // Manda los primeros 8 bits
+    I2C_MasterWriteByte(Config & 0xFF);                     // Manda los ultimos 8 bits
+    I2C_MasterSendStop();                                   // Finaliza la conexion  
+    
+
+    for(;;)
+    {
+     //optener corriente es:
+        
+        //Calibra la corriente
+        do{
+            result[0]=I2C_MasterSendStart(SlaveAddress,I2C_WRITE_XFER_MODE);
+        }
+        while(result[0]!=I2C_MSTR_NO_ERROR);                    // Inicializar la conexion
+        I2C_MasterWriteByte(0x05);                              // Direcciona memoria del sensor a la memoria de calibracion
+        I2C_MasterWriteByte((Calib >> 8) & 0xFF);               // Manda los primeros 8 bits
+        I2C_MasterWriteByte(Calib & 0xFF);                      // Manda los ultimos 8 bits
+        I2C_MasterSendStop();                                   // Finaliza la conexion  
+        
+        //lee corriente
+        do{
+            result[0]=I2C_MasterSendStart(SlaveAddress,I2C_WRITE_XFER_MODE);
+        }
+        while(result[0]!=I2C_MSTR_NO_ERROR);                    // Inicializar la conexion
+        I2C_MasterWriteByte(0x04);                              // Direcciona memoria del sensor a la memoria de la corriente
+        I2C_MasterSendRestart(SlaveAddress,I2C_READ_XFER_MODE); // Selecciona lectura
+        CyDelay(1);                                             // Tiempo de espera mayor a 532us     
+        result[0]=I2C_MasterReadByte(I2C_ACK_DATA);             // Lee y continua
+        result[1]=I2C_MasterReadByte(I2C_NAK_DATA);             // Lee y finaliza
+        I2C_MasterSendStop();                                   // Finaliza la conexion  
+        
+        //escalizar 
+        Lectura = ((uint16)(result[0])<<8)|(uint16)result[1];   
+        LCD_Position(0,0);
+        LCD_PrintNumber(Lectura/10);
+        LCD_PrintString(".");
+        LCD_PrintNumber(Lectura%10);
+        CyDelay(500);
+        LCD_CLEAR_DISPLAY;
+    }
+}
